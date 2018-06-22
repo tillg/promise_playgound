@@ -1,11 +1,49 @@
+/* jshint esversion: 6 */
+
+
 var request = require("request");
 var userDetails;
 
-const firstUserUrl = 'https://api.github.com/users/tillg';
+const githubBaseUrl = 'https://api.github.com/users/';
+const firstUserId = 'tillg';
 
-function getFollowersUrlPromise(userUrl) {
+const buildGithubUrl = userId => {
+  return githubBaseUrl + userId;
+};
+
+/**
+ * Get the userIds of the followers of a given user
+ * @param {*} userId of user who's followers we are looking for
+ */
+const getFollowers = userId => {
   var options = {
-    url: userUrl,
+    url: buildGithubUrl(userId),
+    headers: {
+      'User-Agent': 'request'
+    }
+  };
+  return new Promise(function (resolve, reject) {
+      request.get(options, function (err, resp, body) {
+        if (err) {
+          reject(err);
+        } else {
+          userObject = JSON.parse(body);
+          resolve(userObject.followers_url);
+        }
+      });
+    })
+    .then(followersUrl => { // Now we have the URL from where we can retrieve the followers
+      return getFollowersAtUrl(followersUrl);
+    });
+};
+
+/**
+ * Returns the URL where the followers can be requested from a given Github user
+ * @param {*} userId: The Id of the github user profile of which we want the followers
+ */
+function getFollowersUrl(userId) {
+  var options = {
+    url: buildGithubUrl(userId),
     headers: {
       'User-Agent': 'request'
     }
@@ -24,7 +62,11 @@ function getFollowersUrlPromise(userUrl) {
   });
 }
 
-function getFollowers(followersUrl) {
+/**
+ * Retrieves the followers of a Github user at the specified URL
+ * @param {*} followersUrl 
+ */
+const getFollowersAtUrl = (followersUrl) => {
   var options = {
     url: followersUrl,
     headers: {
@@ -38,29 +80,34 @@ function getFollowers(followersUrl) {
       if (err) {
         reject(err);
       } else {
-        let followersObjects = JSON.parse(body);
-        console.log(followersObjects);
-        resolve(userObject.followers_url);
+        const followersArray = JSON.parse(body);
+        //console.log(followersObjects);
+        const followersUrls = followersArray.map(u => u.login);
+        resolve(followersUrls);
       }
     });
   });
-}
+};
 
 function main() {
-  var firstFollowerUrlpromise = getFollowersUrlPromise(firstUserUrl);
-  firstFollowerUrlpromise
-    .then(function (followers_url) {
-      console.log("Initiale user: " + firstUserUrl);
-      console.log("   followers_url: " + followers_url);
-      return followers_url;
-      // That could be a pattern: A function that just logs and returns it's content so the next .then function can continue using it
+  const followers = getFollowers(firstUserId);
+  followers
+    .then(function (followers) {
+      console.log(firstUserId + ' --> ' + followers);
+      return followers;
     })
-    .then(function (followers_url) {
-      return getFollowers(followers_url);
+    .then(followers => {
+      followers.forEach(userId => {
+        getFollowers(userId)
+          .then(followers => {
+            console.log(userId + ' --> ' + followers);
+          });
+      });
     })
     .catch(function (error) {
       console.log('ERROR: ' + error);
-    })
+    });
+  return;
 }
 
 main();
